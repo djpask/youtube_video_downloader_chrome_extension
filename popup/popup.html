@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Video Downloader Pro</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-title">
+        <div class="app-logo">
+          <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        </div>
+        <div>
+          <h1 class="app-title">YT Downloader Pro</h1>
+          <div class="app-subtitle">Massima Qualità & Tracce Audio</div>
+        </div>
+      </div>
+      <div class="status-indicator" id="engine-status-badge" title="Stato del motore di download">
+        <span class="status-dot" id="engine-dot"></span>
+        <span class="status-text" id="engine-status-text">Verifica...</span>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="app-main">
+      <!-- Loading State -->
+      <div class="loading-state" id="view-loading">
+        <div class="spinner"></div>
+        <div class="loading-text">Rilevamento video nella scheda corrente...</div>
+      </div>
+
+      <!-- No Video State -->
+      <div class="empty-state" id="view-no-video" style="display: none;">
+        <div class="empty-icon">📺</div>
+        <h3>Nessun video YouTube attivo</h3>
+        <p>Apri una pagina video su YouTube per scaricarlo alla massima qualità (fino a 4K/8K) e scegliere la traccia audio desiderata.</p>
+        <button class="btn btn-secondary" id="btn-open-youtube">Vai su YouTube</button>
+      </div>
+
+      <!-- Video Downloader Form State -->
+      <div class="video-state" id="view-video" style="display: none;">
+        <div class="video-card">
+          <div class="thumb-container">
+            <img id="video-thumb" src="" alt="Thumbnail">
+            <span class="duration-badge" id="video-duration">--:--</span>
+          </div>
+          <div class="video-meta">
+            <h2 class="video-title" id="video-title">Titolo del Video</h2>
+            <div class="video-channel" id="video-channel">Canale</div>
+          </div>
+        </div>
+
+        <div class="max-badge" id="max-quality-badge">
+          ⭐ Massima Risoluzione Rilevata: <strong id="max-quality-text">--</strong>
+        </div>
+
+        <div class="control-group">
+          <label class="control-label" for="select-quality">
+            <span>Risoluzione Video</span>
+            <span class="hint-tag">Max default</span>
+          </label>
+          <div class="select-wrapper">
+            <select id="select-quality" class="select-input"></select>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label class="control-label" for="select-audio">
+            <span>Traccia Audio</span>
+            <span class="hint-tag" id="audio-tracks-count">Audio multilingua</span>
+          </label>
+          <div class="select-wrapper">
+            <select id="select-audio" class="select-input"></select>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label class="control-label">Formato</label>
+          <div class="format-chips">
+            <button class="format-chip active" data-format="mp4">MP4 Video</button>
+            <button class="format-chip" data-format="webm">WebM Video</button>
+            <button class="format-chip" data-format="audio_only">MP3 Audio</button>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="btn-start-download">
+          <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          <span>Scarica nel PC</span>
+        </button>
+
+        <!-- Progress Box -->
+        <div class="progress-box" id="progress-box" style="display: none;">
+          <div class="progress-header">
+            <span id="prog-status">Scaricamento in corso...</span>
+            <span id="prog-percent">0%</span>
+          </div>
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="prog-bar-fill"></div>
+          </div>
+          <div class="progress-footer">
+            <span id="prog-speed">-- MB/s</span>
+            <span id="prog-eta">ETA --:--</span>
+          </div>
+          <div class="completed-actions" id="completed-actions" style="display: none;">
+            <button class="btn btn-secondary btn-sm" id="btn-reveal-folder">
+              📁 Apri in Scaricati
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Helper Alert Box (if helper is offline) -->
+      <div class="helper-alert" id="helper-offline-box" style="display: none;">
+        <div class="alert-title">⚠️ Helper locale non in esecuzione</div>
+        <p>Per scaricare in 4K e con tracce audio dubbing, avvia il server locale eseguendo nel terminale:</p>
+        <code class="code-block">sw_development/youtube_video_downloader_chrome_extension/backend/start.sh</code>
+        <button class="btn btn-sm btn-outline" id="btn-retry-helper" style="margin-top: 8px;">Riprova connessione</button>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div class="footer-dir">
+        <span>Cartella download:</span>
+        <code id="download-folder-path">~/Scaricati</code>
+      </div>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

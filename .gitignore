@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pyo
+*.log
+*.pid
+backend/server.log
+backend/server.pid
+.DS_Store

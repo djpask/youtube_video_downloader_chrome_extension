@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube Video Downloader Pro",
+  "version": "1.0.0",
+  "description": "Scarica video YouTube alla massima qualità disponibile (4K, 1440p, 1080p) con selezione della traccia audio.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    },
+    "default_title": "YouTube Video Downloader Pro"
+  },
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage",
+    "downloads"
+  ],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "*://*.googlevideo.com/*",
+    "http://127.0.0.1:8765/*",
+    "http://localhost:8765/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.youtube.com/*"
+      ],
+      "js": [
+        "content/content.js"
+      ],
+      "css": [
+        "content/content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
