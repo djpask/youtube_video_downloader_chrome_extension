@@ -83,7 +83,7 @@ class YouTubeDownloaderHandler(http.server.BaseHTTPRequestHandler):
             self.send_json({
                 "status": "ok",
                 "service": "youtube_video_downloader_helper",
-                "version": "1.1.0",
+                "version": "0.50",
                 "ytdlp_available": ytdlp_ok,
                 "ffmpeg_available": ffmpeg_ok,
                 "download_dir": DEFAULT_DOWNLOAD_DIR

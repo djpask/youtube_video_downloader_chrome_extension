@@ -1,4 +1,4 @@
-# YouTube Video Downloader Pro (Chrome Extension MV3)
+# YouTube Video Downloader Pro (Chrome Extension MV3) - v0.50
 
 Estensione Chrome moderna (Manifest V3) che consente di scaricare nel proprio PC il video YouTube che si sta guardando alla **massima qualità disponibile** (4K UHD 2160p, 2K QHD 1440p, Full HD 1080p, HD 720p) e permette di **scegliere la traccia audio desiderata** (audio originale, tracce doppiaggio multilingua come Italiano, Inglese, Spagnolo, Francese, ecc., oppure formati ad alta fedeltà Opus/AAC).
 
@@ -18,16 +18,21 @@ Estensione Chrome moderna (Manifest V3) che consente di scaricare nel proprio PC
    - Inietta un pulsante personalizzato **"Scarica"** direttamente nella barra delle azioni di YouTube (accanto ai tasti Mi piace, Condividi, ecc.).
    - Cliccando sul pulsante si apre una modale fluida in stile *Glassmorphism* per configurare risoluzione, traccia audio e formato con 1 clic.
 
-4. **Popup Estensione Dedicato:**
+4. **Pannello Gestione Download & Interruzione Selettiva (v0.50):**
+   - Visualizzazione in tempo reale di tutti i download in corso con velocità (MB/s), percentuale e tempo stimato (ETA).
+   - Interruzione selettiva immediata di singoli download tramite pulsante **"⏹️ Interrompi"** sia dal popup sia direttamente da YouTube.
+   - Pulizia automatica istantanea dei file frammentati e temporanei (`.part`).
+
+5. **Popup Estensione con Navigazione a Schede:**
    - Icona nella barra del browser con stato del motore in tempo reale.
    - Rileva istantaneamente il video nella scheda attiva, mostra anteprima, durata, risoluzioni e tracce disponibili.
 
-5. **Formati Supportati:**
+6. **Formati Supportati:**
    - **MP4 (Video + Audio):** Massima compatibilità universale.
    - **WebM (Video + Audio):** Massima efficienza di compressione (VP9/AV1 + Opus).
    - **MP3 / M4A (Solo Audio):** Estrazione diretta della traccia audio prescelta.
 
-6. **Monitoraggio e Notifica:**
+7. **Monitoraggio e Notifica:**
    - Avanzamento in tempo reale con velocità (MB/s), percentuale (0-100%) e tempo stimato (ETA).
    - Pulsante per aprire direttamente la cartella `~/Scaricati` al termine del download.
 
