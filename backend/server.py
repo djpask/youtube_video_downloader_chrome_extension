@@ -13,11 +13,103 @@ import urllib.parse
 from pathlib import Path
 
 PORT = 8765
-DEFAULT_DOWNLOAD_DIR = str(Path.home() / "Scaricati")
-if not os.path.exists(DEFAULT_DOWNLOAD_DIR):
-    DEFAULT_DOWNLOAD_DIR = str(Path.home() / "Downloads")
-    if not os.path.exists(DEFAULT_DOWNLOAD_DIR):
-        DEFAULT_DOWNLOAD_DIR = str(Path.home())
+CONFIG_DIR = os.path.expanduser("~/.config/youtube_video_downloader")
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+
+def get_default_download_dir():
+    d = str(Path.home() / "Scaricati")
+    if not os.path.exists(d):
+        d = str(Path.home() / "Downloads")
+        if not os.path.exists(d):
+            d = str(Path.home())
+    return d
+
+def load_config():
+    default_dir = get_default_download_dir()
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                d = data.get("download_dir")
+                if d and isinstance(d, str):
+                    expanded = os.path.abspath(os.path.expanduser(d.strip()))
+                    if os.path.isdir(expanded) and os.access(expanded, os.W_OK):
+                        return {"download_dir": expanded}
+                    elif not os.path.exists(expanded):
+                        try:
+                            os.makedirs(expanded, exist_ok=True)
+                            return {"download_dir": expanded}
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+    return {"download_dir": default_dir}
+
+current_config = load_config()
+config_lock = threading.Lock()
+
+def get_current_download_dir():
+    with config_lock:
+        return current_config.get("download_dir") or get_default_download_dir()
+
+def set_current_download_dir(path):
+    if not path or not isinstance(path, str):
+        return False, "Percorso non valido"
+    expanded = os.path.abspath(os.path.expanduser(path.strip()))
+    try:
+        os.makedirs(expanded, exist_ok=True)
+    except Exception as e:
+        return False, f"Impossibile creare la cartella: {e}"
+
+    if not os.access(expanded, os.W_OK):
+        return False, "La cartella selezionata non ha permessi di scrittura"
+
+    with config_lock:
+        current_config["download_dir"] = expanded
+        try:
+            os.makedirs(CONFIG_DIR, exist_ok=True)
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                json.dump(current_config, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"[Config] Errore salvataggio file configurazione: {e}")
+    return True, expanded
+
+def pick_system_folder(initial_dir=None):
+    if not initial_dir or not os.path.exists(initial_dir):
+        initial_dir = get_current_download_dir()
+
+    # 1. Try zenity
+    try:
+        zenity_cmd = ["zenity", "--file-selection", "--directory", "--title=Seleziona la cartella per i video di YouTube"]
+        if os.path.isdir(initial_dir):
+            zenity_cmd.append(f"--filename={os.path.abspath(initial_dir)}/")
+        res = subprocess.run(zenity_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=180)
+        if res.returncode == 0:
+            chosen = res.stdout.strip()
+            if chosen and os.path.isdir(chosen):
+                return "ok", chosen
+        elif res.returncode == 1:
+            return "cancelled", None
+    except Exception:
+        pass
+
+    # 2. Try tkinter filedialog fallback
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        chosen = filedialog.askdirectory(initialdir=initial_dir, title="Seleziona la cartella per i video di YouTube")
+        root.destroy()
+        if chosen and os.path.isdir(chosen):
+            return "ok", chosen
+        elif chosen == "":
+            return "cancelled", None
+    except Exception:
+        pass
+
+    return "unsupported", None
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BUNDLED_YTDLP = os.path.join(SCRIPT_DIR, "yt-dlp")
@@ -86,7 +178,15 @@ class YouTubeDownloaderHandler(http.server.BaseHTTPRequestHandler):
                 "version": "0.50",
                 "ytdlp_available": ytdlp_ok,
                 "ffmpeg_available": ffmpeg_ok,
-                "download_dir": DEFAULT_DOWNLOAD_DIR
+                "download_dir": get_current_download_dir()
+            })
+            return
+
+        if path == "/config":
+            self.send_json({
+                "status": "ok",
+                "download_dir": get_current_download_dir(),
+                "default_dir": get_default_download_dir()
             })
             return
 
@@ -130,6 +230,27 @@ class YouTubeDownloaderHandler(http.server.BaseHTTPRequestHandler):
             self.handle_download(body)
             return
 
+        if path == "/config":
+            new_dir = body.get("download_dir")
+            ok, res = set_current_download_dir(new_dir)
+            if ok:
+                self.send_json({"status": "ok", "download_dir": res})
+            else:
+                self.send_json({"status": "error", "message": res}, 400)
+            return
+
+        if path == "/select_folder":
+            curr = get_current_download_dir()
+            st, chosen = pick_system_folder(curr)
+            if st == "ok":
+                set_current_download_dir(chosen)
+                self.send_json({"status": "ok", "download_dir": chosen})
+            elif st == "cancelled":
+                self.send_json({"status": "cancelled", "download_dir": curr})
+            else:
+                self.send_json({"status": "unsupported", "download_dir": curr, "message": "Dialog di sistema non disponibile"})
+            return
+
         if path == "/cancel":
             dl_id = body.get("download_id")
             if not dl_id:
@@ -139,7 +260,7 @@ class YouTubeDownloaderHandler(http.server.BaseHTTPRequestHandler):
             return
 
         if path == "/open_folder":
-            folder = body.get("folder", DEFAULT_DOWNLOAD_DIR)
+            folder = body.get("folder") or get_current_download_dir()
             file_path = body.get("path")
             target = file_path if file_path and os.path.exists(file_path) else folder
             try:
@@ -306,7 +427,7 @@ class YouTubeDownloaderHandler(http.server.BaseHTTPRequestHandler):
         quality = body.get("quality", "max")
         audio_track_id = body.get("audio_track_id", "auto")
         format_mode = body.get("format", "mp4")
-        output_dir = body.get("output_dir", DEFAULT_DOWNLOAD_DIR)
+        output_dir = body.get("output_dir") or get_current_download_dir()
         os.makedirs(output_dir, exist_ok=True)
 
         download_id = f"dl_{int(time.time()*1000)}"
@@ -482,7 +603,7 @@ def run():
     http.server.ThreadingHTTPServer.allow_reuse_address = True
     httpd = http.server.ThreadingHTTPServer(server_address, YouTubeDownloaderHandler)
     print(f"[YT-Server] Ascolto attivo su http://127.0.0.1:{PORT}")
-    print(f"[YT-Server] Cartella download predefinita: {DEFAULT_DOWNLOAD_DIR}")
+    print(f"[YT-Server] Cartella download attiva: {get_current_download_dir()}")
     httpd.serve_forever()
 
 if __name__ == "__main__":

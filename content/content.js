@@ -7,6 +7,7 @@
   let pollInterval = null;
   let trayInterval = null;
   let currentDownloadId = null;
+  let inPageDownloadDir = "";
 
   const DOWNLOAD_ICON = `
     <svg viewBox="0 0 24 24">
@@ -137,6 +138,20 @@
               </div>
             </div>
 
+            <!-- Destination Folder Section in Modal -->
+            <div class="ytd-form-group ytd-folder-group">
+              <div class="ytd-folder-header">
+                <label class="ytd-form-label" style="margin-bottom:0;">
+                  <span>Cartella di Salvataggio</span>
+                </label>
+                <button type="button" class="ytd-folder-browse-btn" id="ytd-btn-browse-folder" title="Sfoglia cartelle sul PC">📂 Sfoglia</button>
+              </div>
+              <div class="ytd-folder-display" id="ytd-folder-display" title="Cartella in cui verrà salvato il video">
+                <span style="font-size: 14px;">📁</span>
+                <span class="ytd-folder-path" id="ytd-folder-path-text">~/Scaricati</span>
+              </div>
+            </div>
+
             <button class="ytd-download-start-btn" id="ytd-start-download">
               <svg style="width: 20px; height: 20px; fill: currentColor;" viewBox="0 0 24 24">
                 <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
@@ -201,6 +216,43 @@
     });
 
     requestAnimationFrame(() => overlay.classList.add('active'));
+
+    // Fetch active download dir
+    try {
+      const cfg = await chrome.runtime.sendMessage({ action: 'GET_CONFIG' });
+      if (cfg && cfg.download_dir) {
+        inPageDownloadDir = cfg.download_dir;
+        const pEl = document.getElementById('ytd-folder-path-text');
+        if (pEl) pEl.textContent = cfg.download_dir;
+      }
+    } catch (e) {}
+
+    // Folder browse button listener
+    const browseBtn = document.getElementById('ytd-btn-browse-folder');
+    const folderBox = document.getElementById('ytd-folder-display');
+    const handleBrowseClick = async () => {
+      if (browseBtn) {
+        browseBtn.disabled = true;
+        browseBtn.textContent = 'Apertura...';
+      }
+      try {
+        const res = await chrome.runtime.sendMessage({ action: 'SELECT_FOLDER' });
+        if (res && res.status === 'ok' && res.download_dir) {
+          inPageDownloadDir = res.download_dir;
+          const pEl = document.getElementById('ytd-folder-path-text');
+          if (pEl) pEl.textContent = res.download_dir;
+        }
+      } catch (err) {
+        console.warn('Folder selection error:', err);
+      } finally {
+        if (browseBtn) {
+          browseBtn.disabled = false;
+          browseBtn.textContent = '📂 Sfoglia';
+        }
+      }
+    };
+    if (browseBtn) browseBtn.addEventListener('click', handleBrowseClick);
+    if (folderBox) folderBox.addEventListener('click', handleBrowseClick);
 
     try {
       const response = await chrome.runtime.sendMessage({
@@ -343,7 +395,8 @@
         title: info.title,
         quality: qualitySelect.value,
         audio_track_id: audioSelect.value,
-        format: chosenFormat
+        format: chosenFormat,
+        output_dir: inPageDownloadDir
       };
 
       try {

@@ -99,6 +99,49 @@ async function cancelDownload(downloadId) {
   }
 }
 
+async function getConfig() {
+  try {
+    const resp = await fetch(`${HELPER_BASE_URL}/config`);
+    if (!resp.ok) throw new Error(`HTTP error ${resp.status}`);
+    return await resp.json();
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+async function setConfig(downloadDir) {
+  try {
+    const resp = await fetch(`${HELPER_BASE_URL}/config`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ download_dir: downloadDir })
+    });
+    const res = await resp.json();
+    if (!resp.ok) throw new Error(res.message || `HTTP error ${resp.status}`);
+    await chrome.storage.local.set({ download_dir: res.download_dir });
+    return res;
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+async function selectFolder() {
+  try {
+    const resp = await fetch(`${HELPER_BASE_URL}/select_folder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    });
+    const res = await resp.json();
+    if (res.status === "ok" && res.download_dir) {
+      await chrome.storage.local.set({ download_dir: res.download_dir });
+    }
+    return res;
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
 async function openFolder(targetPath) {
   try {
     const resp = await fetch(`${HELPER_BASE_URL}/open_folder`, {
@@ -165,6 +208,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case 'OPEN_FOLDER': {
         const res = await openFolder(message.path);
+        sendResponse(res);
+        break;
+      }
+
+      case 'GET_CONFIG': {
+        const res = await getConfig();
+        sendResponse(res);
+        break;
+      }
+
+      case 'SET_CONFIG': {
+        const res = await setConfig(message.download_dir);
+        sendResponse(res);
+        break;
+      }
+
+      case 'SELECT_FOLDER': {
+        const res = await selectFolder();
         sendResponse(res);
         break;
       }

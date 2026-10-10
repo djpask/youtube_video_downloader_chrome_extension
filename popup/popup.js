@@ -19,6 +19,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   const engineDot = document.getElementById('engine-dot');
   const engineStatusText = document.getElementById('engine-status-text');
   const downloadFolderText = document.getElementById('download-folder-path');
+  const activeFolderPath = document.getElementById('active-folder-path');
+  const btnBrowseFolder = document.getElementById('btn-browse-folder');
+  const btnEditFolder = document.getElementById('btn-edit-folder');
+  const folderPreviewBox = document.getElementById('folder-preview-box');
+  const folderInlineEditor = document.getElementById('folder-inline-editor');
+  const inputFolderPath = document.getElementById('input-folder-path');
+  const btnSaveFolder = document.getElementById('btn-save-folder');
+  const btnCancelFolder = document.getElementById('btn-cancel-folder');
+  const folderStatusMsg = document.getElementById('folder-status-msg');
+  const btnFooterChangeFolder = document.getElementById('btn-footer-change-folder');
 
   const videoThumb = document.getElementById('video-thumb');
   const videoTitle = document.getElementById('video-title');
@@ -44,6 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let selectedFormat = 'mp4';
   let activeTab = 'tab-video';
   let pollInterval = null;
+  let currentDownloadDir = '~/Scaricati';
 
   // Tab switching
   tabVideoBtn.addEventListener('click', () => switchTab('tab-video'));
@@ -85,6 +96,119 @@ document.addEventListener('DOMContentLoaded', async () => {
     await init();
   });
 
+  function updateFolderDisplay(path) {
+    if (!path) return;
+    currentDownloadDir = path;
+    if (activeFolderPath) activeFolderPath.textContent = path;
+    if (downloadFolderText) downloadFolderText.textContent = path;
+    if (inputFolderPath) inputFolderPath.value = path;
+  }
+
+  function showFolderMessage(msg, type = 'error') {
+    if (!folderStatusMsg) return;
+    folderStatusMsg.textContent = msg;
+    folderStatusMsg.className = `folder-status-msg ${type}`;
+    folderStatusMsg.style.display = 'block';
+    setTimeout(() => {
+      if (folderStatusMsg) folderStatusMsg.style.display = 'none';
+    }, 4000);
+  }
+
+  function openFolderEditor() {
+    if (folderPreviewBox) folderPreviewBox.style.display = 'none';
+    if (folderInlineEditor) folderInlineEditor.style.display = 'flex';
+    if (inputFolderPath) {
+      inputFolderPath.value = currentDownloadDir;
+      inputFolderPath.focus();
+    }
+  }
+
+  function closeFolderEditor() {
+    if (folderInlineEditor) folderInlineEditor.style.display = 'none';
+    if (folderPreviewBox) folderPreviewBox.style.display = 'flex';
+    if (folderStatusMsg) folderStatusMsg.style.display = 'none';
+  }
+
+  async function handleBrowseFolder() {
+    const btn = btnBrowseFolder;
+    const oldText = btn ? btn.textContent : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Apertura...';
+    }
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'SELECT_FOLDER' });
+      if (res && res.status === 'ok' && res.download_dir) {
+        updateFolderDisplay(res.download_dir);
+        showFolderMessage('✅ Cartella aggiornata: ' + res.download_dir, 'success');
+      } else if (res && res.status === 'unsupported') {
+        openFolderEditor();
+      }
+    } catch (e) {
+      console.warn('Browse error:', e);
+      openFolderEditor();
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = oldText;
+      }
+    }
+  }
+
+  async function handleSaveCustomFolder() {
+    const val = inputFolderPath ? inputFolderPath.value.trim() : '';
+    if (!val) {
+      showFolderMessage('Inserisci un percorso valido', 'error');
+      return;
+    }
+    if (btnSaveFolder) {
+      btnSaveFolder.disabled = true;
+      btnSaveFolder.textContent = 'Verifica...';
+    }
+    try {
+      const res = await chrome.runtime.sendMessage({
+        action: 'SET_CONFIG',
+        download_dir: val
+      });
+      if (res && res.status === 'ok' && res.download_dir) {
+        updateFolderDisplay(res.download_dir);
+        closeFolderEditor();
+      } else {
+        showFolderMessage(res?.message || res?.error || 'Percorso non valido o inaccessibile', 'error');
+      }
+    } catch (e) {
+      showFolderMessage('Errore: ' + e.message, 'error');
+    } finally {
+      if (btnSaveFolder) {
+        btnSaveFolder.disabled = false;
+        btnSaveFolder.textContent = 'Salva';
+      }
+    }
+  }
+
+  if (btnBrowseFolder) btnBrowseFolder.addEventListener('click', handleBrowseFolder);
+  if (btnFooterChangeFolder) btnFooterChangeFolder.addEventListener('click', handleBrowseFolder);
+  if (btnEditFolder) btnEditFolder.addEventListener('click', openFolderEditor);
+  if (folderPreviewBox) folderPreviewBox.addEventListener('click', openFolderEditor);
+  if (btnCancelFolder) btnCancelFolder.addEventListener('click', closeFolderEditor);
+  if (btnSaveFolder) btnSaveFolder.addEventListener('click', handleSaveCustomFolder);
+
+  if (inputFolderPath) {
+    inputFolderPath.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleSaveCustomFolder();
+      else if (e.key === 'Escape') closeFolderEditor();
+    });
+  }
+
+  document.querySelectorAll('.preset-tag').forEach((tag) => {
+    tag.addEventListener('click', () => {
+      const p = tag.getAttribute('data-preset');
+      if (p && inputFolderPath) {
+        inputFolderPath.value = p;
+      }
+    });
+  });
+
   async function checkHelper() {
     try {
       const res = await chrome.runtime.sendMessage({ action: 'CHECK_HELPER' });
@@ -92,7 +216,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         engineDot.className = 'status-dot active';
         engineStatusText.textContent = 'Engine Attivo';
         if (res.download_dir) {
-          downloadFolderText.textContent = res.download_dir;
+          updateFolderDisplay(res.download_dir);
         }
         helperOfflineBox.style.display = 'none';
         return true;
@@ -387,7 +511,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       title: currentVideoData?.title || 'Video YouTube',
       quality: selectQuality.value,
       audio_track_id: selectAudio.value,
-      format: selectedFormat
+      format: selectedFormat,
+      output_dir: currentDownloadDir
     };
 
     try {

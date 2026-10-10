@@ -141,11 +141,58 @@ def test_download_and_completion():
 
     assert completed, "Download timeout non completato in 50 secondi"
 
+def test_folder_configuration():
+    print("[TEST 6] Test configurazione e cambio cartella di salvataggio...")
+    
+    # 1. Leggi cartella iniziale
+    req_cfg = urllib.request.Request(f"{BASE_URL}/config")
+    with urllib.request.urlopen(req_cfg, timeout=5) as resp:
+        cfg = json.loads(resp.read().decode("utf-8"))
+        assert cfg["status"] == "ok", f"Config status errato: {cfg}"
+        initial_dir = cfg["download_dir"]
+        print(f"  -> Cartella iniziale rilevata: {initial_dir}")
+
+    # 2. Imposta cartella personalizzata
+    custom_target = os.path.expanduser("~/Scaricati/test_cartella_yt")
+    req_set = urllib.request.Request(
+        f"{BASE_URL}/config",
+        data=json.dumps({"download_dir": custom_target}).encode("utf-8"),
+        headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req_set, timeout=5) as resp:
+        res = json.loads(resp.read().decode("utf-8"))
+        assert res["status"] == "ok", f"Cambio cartella fallito: {res}"
+        assert res["download_dir"] == custom_target, f"Cartella non aggiornata: {res}"
+        print(f"  -> OK: Cartella personalizzata impostata con successo: {res['download_dir']}")
+
+    # 3. Verifica persistenza in /status
+    req_st = urllib.request.Request(f"{BASE_URL}/status")
+    with urllib.request.urlopen(req_st, timeout=5) as resp:
+        st = json.loads(resp.read().decode("utf-8"))
+        assert st["download_dir"] == custom_target, f"Status download_dir non sincronizzato: {st}"
+        print(f"  -> OK: Endpoint /status riflette la nuova cartella: {st['download_dir']}")
+
+    # 4. Ripristina cartella iniziale
+    req_restore = urllib.request.Request(
+        f"{BASE_URL}/config",
+        data=json.dumps({"download_dir": initial_dir}).encode("utf-8"),
+        headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req_restore, timeout=5) as resp:
+        res_rest = json.loads(resp.read().decode("utf-8"))
+        assert res_rest["download_dir"] == initial_dir
+        print(f"  -> OK: Cartella ripristinata correttamente a: {initial_dir}")
+
+    # Cleanup test dir if empty
+    if os.path.exists(custom_target) and not os.listdir(custom_target):
+        os.rmdir(custom_target)
+
 if __name__ == '__main__':
     print("=== AVVIO SUITE DI TEST CON CONTROLLO & INTERRUZIONE DOWNLOAD ===")
     test_status()
     test_video_info()
     test_multilingual_audio()
     test_selective_cancellation()
+    test_folder_configuration()
     test_download_and_completion()
     print("=== TUTTI I TEST HANNO AVUTO SUCCESSO! ===")

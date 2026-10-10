@@ -102,6 +102,39 @@
             </div>
           </div>
 
+          <!-- Destination Folder Section -->
+          <div class="control-group folder-picker-group">
+            <div class="folder-header-row">
+              <label class="control-label" style="margin-bottom: 0;">
+                <span>Cartella di Salvataggio</span>
+              </label>
+              <div class="folder-header-actions">
+                <button type="button" class="btn-folder-action" id="btn-browse-folder" title="Sfoglia cartelle sul PC">📂 Sfoglia</button>
+                <button type="button" class="btn-folder-action" id="btn-edit-folder" title="Modifica percorso manualmente">✏️ Modifica</button>
+              </div>
+            </div>
+
+            <div class="folder-preview-box" id="folder-preview-box" title="Clicca per scegliere o cambiare cartella">
+              <span class="folder-icon">📁</span>
+              <span class="folder-path-text" id="active-folder-path">~/Scaricati</span>
+            </div>
+
+            <div class="folder-inline-editor" id="folder-inline-editor" style="display: none;">
+              <div class="folder-input-row">
+                <input type="text" id="input-folder-path" class="folder-text-input" placeholder="/home/pask/Scaricati">
+                <button type="button" class="btn btn-sm btn-primary" id="btn-save-folder">Salva</button>
+                <button type="button" class="btn btn-sm btn-outline" id="btn-cancel-folder">✕</button>
+              </div>
+              <div class="folder-presets-row">
+                <span class="presets-label">Scelte rapide:</span>
+                <button type="button" class="preset-tag" data-preset="~/Scaricati">Scaricati</button>
+                <button type="button" class="preset-tag" data-preset="~/Video">Video</button>
+                <button type="button" class="preset-tag" data-preset="~/Desktop">Desktop</button>
+              </div>
+              <div class="folder-status-msg" id="folder-status-msg" style="display: none;"></div>
+            </div>
+          </div>
+
           <button class="btn btn-primary" id="btn-start-download">
             <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
             <span>Scarica nel PC</span>
@@ -160,10 +193,11 @@
 
     <!-- Footer -->
     <footer class="app-footer">
-      <div class="footer-dir">
+      <div class="footer-dir" id="footer-dir-wrap" title="Cartella attiva per i download">
         <span>Destinazione:</span>
         <code id="download-folder-path">~/Scaricati</code>
       </div>
+      <button type="button" class="footer-change-btn" id="btn-footer-change-folder" title="Cambia cartella di destinazione">📂 Cambia</button>
     </footer>
   </div>
 

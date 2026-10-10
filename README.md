@@ -18,21 +18,27 @@ Estensione Chrome moderna (Manifest V3) che consente di scaricare nel proprio PC
    - Inietta un pulsante personalizzato **"Scarica"** direttamente nella barra delle azioni di YouTube (accanto ai tasti Mi piace, Condividi, ecc.).
    - Cliccando sul pulsante si apre una modale fluida in stile *Glassmorphism* per configurare risoluzione, traccia audio e formato con 1 clic.
 
-4. **Pannello Gestione Download & Interruzione Selettiva (v0.50):**
+4. **Pannello Gestione Download & Interruzione Selettiva:**
    - Visualizzazione in tempo reale di tutti i download in corso con velocità (MB/s), percentuale e tempo stimato (ETA).
    - Interruzione selettiva immediata di singoli download tramite pulsante **"⏹️ Interrompi"** sia dal popup sia direttamente da YouTube.
    - Pulizia automatica istantanea dei file frammentati e temporanei (`.part`).
 
-5. **Popup Estensione con Navigazione a Schede:**
+5. **Scelta Personalizzata della Cartella di Salvataggio:**
+   - Possibilità di selezionare la cartella di destinazione sia dal Popup dell'estensione che direttamente dal pannello in-page di YouTube.
+   - Apertura del selettore cartelle nativo del sistema tramite pulsante **"📂 Sfoglia"** (dialog di sistema).
+   - Editor manuale con validazione istantanea dei permessi e pulsanti di scelta rapida (`~/Scaricati`, `~/Video`, `~/Desktop`).
+   - Salvataggio e persistenza del percorso configurato in `~/.config/youtube_video_downloader/config.json`.
+
+6. **Popup Estensione con Navigazione a Schede:**
    - Icona nella barra del browser con stato del motore in tempo reale.
    - Rileva istantaneamente il video nella scheda attiva, mostra anteprima, durata, risoluzioni e tracce disponibili.
 
-6. **Formati Supportati:**
+7. **Formati Supportati:**
    - **MP4 (Video + Audio):** Massima compatibilità universale.
    - **WebM (Video + Audio):** Massima efficienza di compressione (VP9/AV1 + Opus).
    - **MP3 / M4A (Solo Audio):** Estrazione diretta della traccia audio prescelta.
 
-7. **Monitoraggio e Notifica:**
+8. **Monitoraggio e Notifica:**
    - Avanzamento in tempo reale con velocità (MB/s), percentuale (0-100%) e tempo stimato (ETA).
    - Pulsante per aprire direttamente la cartella `~/Scaricati` al termine del download.
 
