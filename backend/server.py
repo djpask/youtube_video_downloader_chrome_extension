@@ -1,4 +1,6 @@
+import signal
 #!/usr/bin/env python3
+import glob
 import http.server
 import json
 import os
@@ -30,6 +32,8 @@ def get_ytdlp_path():
 
 downloads = {}
 downloads_lock = threading.Lock()
+active_processes = {}
+active_processes_lock = threading.Lock()
 
 class YouTubeDownloaderHandler(http.server.BaseHTTPRequestHandler):
     def send_cors_headers(self):
@@ -79,7 +83,7 @@ class YouTubeDownloaderHandler(http.server.BaseHTTPRequestHandler):
             self.send_json({
                 "status": "ok",
                 "service": "youtube_video_downloader_helper",
-                "version": "1.0.0",
+                "version": "1.1.0",
                 "ytdlp_available": ytdlp_ok,
                 "ffmpeg_available": ffmpeg_ok,
                 "download_dir": DEFAULT_DOWNLOAD_DIR
@@ -89,6 +93,8 @@ class YouTubeDownloaderHandler(http.server.BaseHTTPRequestHandler):
         if path == "/downloads":
             with downloads_lock:
                 items = list(downloads.values())
+            # Sort newest first
+            items.sort(key=lambda x: x.get("created_at", 0), reverse=True)
             self.send_json({"downloads": items})
             return
 
@@ -124,6 +130,14 @@ class YouTubeDownloaderHandler(http.server.BaseHTTPRequestHandler):
             self.handle_download(body)
             return
 
+        if path == "/cancel":
+            dl_id = body.get("download_id")
+            if not dl_id:
+                self.send_json({"error": "download_id required"}, 400)
+                return
+            self.handle_cancel(dl_id)
+            return
+
         if path == "/open_folder":
             folder = body.get("folder", DEFAULT_DOWNLOAD_DIR)
             file_path = body.get("path")
@@ -136,6 +150,44 @@ class YouTubeDownloaderHandler(http.server.BaseHTTPRequestHandler):
             return
 
         self.send_json({"error": "Not found"}, 404)
+
+    def handle_cancel(self, dl_id):
+        cancelled = False
+        with downloads_lock:
+            if dl_id in downloads:
+                item = downloads[dl_id]
+                item["cancelled"] = True
+                if item["status"] in ("starting", "downloading", "muxing"):
+                    item["status"] = "cancelled"
+                    item["speed"] = ""
+                    item["eta"] = ""
+                    cancelled = True
+
+        with active_processes_lock:
+            proc = active_processes.get(dl_id)
+            if proc and proc.poll() is None:
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                    time.sleep(0.2)
+                    if proc.poll() is None:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                    cancelled = True
+                except Exception:
+                    pass
+                active_processes.pop(dl_id, None)
+
+        # Cleanup partial files for this download if known
+        with downloads_lock:
+            p = downloads.get(dl_id, {}).get("path", "")
+            if p:
+                for part in glob.glob(p + "*"):
+                    if part.endswith(".part") or ".f" in part:
+                        try:
+                            os.remove(part)
+                        except Exception:
+                            pass
+
+        self.send_json({"status": "cancelled", "download_id": dl_id, "success": cancelled})
 
     def handle_video_info(self, url):
         ytdlp = get_ytdlp_path()
@@ -268,6 +320,7 @@ class YouTubeDownloaderHandler(http.server.BaseHTTPRequestHandler):
                 "audio_track": audio_track_id,
                 "format": format_mode,
                 "status": "starting",
+                "cancelled": False,
                 "percent": 0,
                 "speed": "",
                 "eta": "",
@@ -287,6 +340,9 @@ class YouTubeDownloaderHandler(http.server.BaseHTTPRequestHandler):
         })
 
 def run_download_task(download_id, url, quality, audio_track_id, format_mode, output_dir):
+    with downloads_lock:
+        if downloads.get(download_id, {}).get("status") == "cancelled" or downloads.get(download_id, {}).get("cancelled"):
+            return
     ytdlp = get_ytdlp_path()
     
     if format_mode == "audio_only":
@@ -337,17 +393,30 @@ def run_download_task(download_id, url, quality, audio_track_id, format_mode, ou
         pass
 
     with downloads_lock:
+        if downloads.get(download_id, {}).get("status") == "cancelled" or downloads.get(download_id, {}).get("cancelled"):
+            return
         downloads[download_id]["status"] = "downloading"
         if expected_path:
             downloads[download_id]["path"] = expected_path
             downloads[download_id]["filename"] = os.path.basename(expected_path)
 
+    dest_filename = expected_path
     try:
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-        dest_filename = expected_path
+        with downloads_lock:
+            if downloads.get(download_id, {}).get("status") == "cancelled" or downloads.get(download_id, {}).get("cancelled"):
+                return
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, preexec_fn=os.setsid)
+        with active_processes_lock:
+            active_processes[download_id] = proc
 
         for line in proc.stdout:
             line_str = line.strip()
+            
+            # Check if cancelled mid-stream
+            with downloads_lock:
+                if downloads.get(download_id, {}).get("status") == "cancelled":
+                    break
+
             if "[download] Destination:" in line_str:
                 raw_dest = line_str.split("[download] Destination:", 1)[1].strip()
                 if not dest_filename:
@@ -355,10 +424,11 @@ def run_download_task(download_id, url, quality, audio_track_id, format_mode, ou
             elif "[Merger] Merging formats into" in line_str:
                 dest_filename = line_str.split("[Merger] Merging formats into", 1)[1].strip().strip('"')
                 with downloads_lock:
-                    downloads[download_id]["status"] = "muxing"
-                    downloads[download_id]["percent"] = 99.0
-                    downloads[download_id]["path"] = dest_filename
-                    downloads[download_id]["filename"] = os.path.basename(dest_filename)
+                    if downloads[download_id]["status"] != "cancelled":
+                        downloads[download_id]["status"] = "muxing"
+                        downloads[download_id]["percent"] = 99.0
+                        downloads[download_id]["path"] = dest_filename
+                        downloads[download_id]["filename"] = os.path.basename(dest_filename)
             elif "[download]" in line_str and "%" in line_str:
                 m = re.search(r"([0-9.]+)%\s+of\s+~?([0-9.]+\w+)\s+at\s+([0-9.]+\w+/s)\s+ETA\s+([0-9:]+)", line_str)
                 if m:
@@ -366,22 +436,27 @@ def run_download_task(download_id, url, quality, audio_track_id, format_mode, ou
                     speed = m.group(3)
                     eta = m.group(4)
                     with downloads_lock:
-                        downloads[download_id]["percent"] = pct
-                        downloads[download_id]["speed"] = speed
-                        downloads[download_id]["eta"] = eta
-                        downloads[download_id]["status"] = "downloading"
+                        if downloads[download_id]["status"] != "cancelled":
+                            downloads[download_id]["percent"] = pct
+                            downloads[download_id]["speed"] = speed
+                            downloads[download_id]["eta"] = eta
+                            downloads[download_id]["status"] = "downloading"
                 else:
                     m2 = re.search(r"([0-9.]+)%", line_str)
                     if m2:
                         with downloads_lock:
-                            downloads[download_id]["percent"] = float(m2.group(1))
+                            if downloads[download_id]["status"] != "cancelled":
+                                downloads[download_id]["percent"] = float(m2.group(1))
 
         proc.wait()
         
         with downloads_lock:
+            # If already cancelled, do not mark as error or completed
+            if downloads[download_id]["status"] == "cancelled":
+                return
+
             if proc.returncode == 0:
                 final_path = dest_filename or expected_path
-                # Clean extension if ended in .fXXX.mp4
                 if final_path and re.search(r"\.f[0-9]+\.", final_path):
                     cleaned = re.sub(r"\.f[0-9]+", "", final_path)
                     if os.path.exists(cleaned):
@@ -395,11 +470,16 @@ def run_download_task(download_id, url, quality, audio_track_id, format_mode, ou
                 downloads[download_id]["error"] = f"Download terminato con codice {proc.returncode}"
     except Exception as e:
         with downloads_lock:
-            downloads[download_id]["status"] = "error"
-            downloads[download_id]["error"] = str(e)
+            if downloads.get(download_id, {}).get("status") != "cancelled":
+                downloads[download_id]["status"] = "error"
+                downloads[download_id]["error"] = str(e)
+    finally:
+        with active_processes_lock:
+            active_processes.pop(download_id, None)
 
 def run():
     server_address = ("127.0.0.1", PORT)
+    http.server.ThreadingHTTPServer.allow_reuse_address = True
     httpd = http.server.ThreadingHTTPServer(server_address, YouTubeDownloaderHandler)
     print(f"[YT-Server] Ascolto attivo su http://127.0.0.1:{PORT}")
     print(f"[YT-Server] Cartella download predefinita: {DEFAULT_DOWNLOAD_DIR}")

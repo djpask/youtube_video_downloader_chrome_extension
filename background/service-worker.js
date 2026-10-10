@@ -62,6 +62,43 @@ async function getDownloadProgress(downloadId) {
   }
 }
 
+async function getAllDownloads() {
+  try {
+    const resp = await fetch(`${HELPER_BASE_URL}/downloads`);
+    if (!resp.ok) throw new Error(`HTTP error ${resp.status}`);
+    const data = await resp.json();
+    
+    // Update badge with active downloads count
+    const activeCount = (data.downloads || []).filter(d => ['starting', 'downloading', 'muxing'].includes(d.status)).length;
+    if (activeCount > 0) {
+      await chrome.action.setBadgeText({ text: String(activeCount) });
+      await chrome.action.setBadgeBackgroundColor({ color: '#FF0033' });
+    } else {
+      await chrome.action.setBadgeText({ text: 'PRO' });
+      await chrome.action.setBadgeBackgroundColor({ color: '#333344' });
+    }
+    return data;
+  } catch (err) {
+    return { error: err.message, downloads: [] };
+  }
+}
+
+async function cancelDownload(downloadId) {
+  try {
+    const resp = await fetch(`${HELPER_BASE_URL}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ download_id: downloadId })
+    });
+    if (!resp.ok) throw new Error(`HTTP error ${resp.status}`);
+    const res = await resp.json();
+    await getAllDownloads(); // refresh badge
+    return res;
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
 async function openFolder(targetPath) {
   try {
     const resp = await fetch(`${HELPER_BASE_URL}/open_folder`, {
@@ -94,7 +131,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case 'START_DOWNLOAD': {
         const res = await startDownload(message.payload);
         if (res.download_id) {
-          // Store active download in storage
           const { activeDownloads = [] } = await chrome.storage.local.get('activeDownloads');
           activeDownloads.unshift({
             id: res.download_id,
@@ -102,7 +138,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             url: message.payload.url,
             startedAt: Date.now()
           });
-          await chrome.storage.local.set({ activeDownloads: activeDownloads.slice(0, 15) });
+          await chrome.storage.local.set({ activeDownloads: activeDownloads.slice(0, 20) });
+          await getAllDownloads();
         }
         sendResponse(res);
         break;
@@ -111,6 +148,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case 'GET_PROGRESS': {
         const prog = await getDownloadProgress(message.downloadId);
         sendResponse(prog);
+        break;
+      }
+
+      case 'GET_ALL_DOWNLOADS': {
+        const all = await getAllDownloads();
+        sendResponse(all);
+        break;
+      }
+
+      case 'CANCEL_DOWNLOAD': {
+        const res = await cancelDownload(message.downloadId);
+        sendResponse(res);
         break;
       }
 
@@ -127,7 +176,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true; // Keep message channel open for async response
 });
 
-// Update badge if needed
+// Initial badge
 chrome.runtime.onInstalled.addListener(() => {
   chrome.action.setBadgeText({ text: 'PRO' });
   chrome.action.setBadgeBackgroundColor({ color: '#FF0033' });

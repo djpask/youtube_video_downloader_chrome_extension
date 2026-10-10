@@ -49,8 +49,58 @@ def test_multilingual_audio():
         sample_langs = [t['label'] for t in data['audioTracks'][:4]]
         print(f"  -> OK: Rilevate {len(data['audioTracks'])} tracce audio. Esempi: {sample_langs}")
 
-def test_download_and_progress():
-    print("[TEST 4] Test download reale con traccia audio e muxing FFmpeg...")
+def test_selective_cancellation():
+    print("[TEST 4] Test avvio download e INTERRUZIONE SELETTIVA (POST /cancel)...")
+    url = "https://www.youtube.com/watch?v=0e3GPea1Tyg"
+    
+    # Avvia download 1
+    req1 = urllib.request.Request(
+        f"{BASE_URL}/download",
+        data=json.dumps({
+            "url": url,
+            "quality": "720",
+            "audio_track_id": "auto",
+            "format": "mp4"
+        }).encode('utf-8'),
+        headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req1, timeout=10) as resp:
+        res1 = json.loads(resp.read().decode('utf-8'))
+        dl1 = res1['download_id']
+        print(f"  -> Avviato download da interrompere (ID: {dl1})")
+
+    # Attendi che il download inizi
+    time.sleep(1.5)
+
+    # Verifica presenza nell'elenco di tutti i download
+    req_list = urllib.request.Request(f"{BASE_URL}/downloads")
+    with urllib.request.urlopen(req_list, timeout=5) as resp:
+        dl_list = json.loads(resp.read().decode('utf-8'))
+        ids = [d['id'] for d in dl_list.get('downloads', [])]
+        assert dl1 in ids, f"Download {dl1} non trovato nell'elenco /downloads"
+        print(f"  -> OK: Download {dl1} presente nell'elenco totale ({len(ids)} elementi registrati)")
+
+    # Invia comando di interruzione per dl1
+    req_cancel = urllib.request.Request(
+        f"{BASE_URL}/cancel",
+        data=json.dumps({"download_id": dl1}).encode('utf-8'),
+        headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req_cancel, timeout=5) as resp:
+        c_res = json.loads(resp.read().decode('utf-8'))
+        assert c_res.get('status') == 'cancelled', f"Cancel fallito: {c_res}"
+        print(f"  -> OK: Richiesta /cancel inviata con successo per {dl1}")
+
+    # Verifica stato progress
+    time.sleep(0.5)
+    req_check = urllib.request.Request(f"{BASE_URL}/progress?id={dl1}")
+    with urllib.request.urlopen(req_check, timeout=5) as resp:
+        p_data = json.loads(resp.read().decode('utf-8'))
+        assert p_data['status'] == 'cancelled', f"Stato non 'cancelled': {p_data}"
+        print(f"  -> OK: Stato verificato con successo: {p_data['status']}")
+
+def test_download_and_completion():
+    print("[TEST 5] Test download completo e verifica file...")
     url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
     req = urllib.request.Request(
         f"{BASE_URL}/download",
@@ -65,9 +115,8 @@ def test_download_and_progress():
     with urllib.request.urlopen(req, timeout=10) as resp:
         res = json.loads(resp.read().decode('utf-8'))
         dl_id = res['download_id']
-        print(f"  -> Avviato download ID: {dl_id}")
+        print(f"  -> Avviato download per test completamento (ID: {dl_id})")
 
-    # Polling progress
     completed = False
     for i in range(50):
         time.sleep(1)
@@ -83,7 +132,7 @@ def test_download_and_progress():
                     sz = os.path.getsize(p_data['path'])
                     print(f"  -> OK: File verificato sul disco: {sz} bytes ({sz / 1024 / 1024:.2f} MB)")
                     os.remove(p_data['path'])
-                    print("  -> File di test rimosso con successo.")
+                    print("  -> File rimosso con successo.")
                 break
             elif status == 'error':
                 raise RuntimeError(f"Download fallito: {p_data.get('error')}")
@@ -93,9 +142,10 @@ def test_download_and_progress():
     assert completed, "Download timeout non completato in 50 secondi"
 
 if __name__ == '__main__':
-    print("=== AVVIO SUITE DI TEST YOUTUBE VIDEO DOWNLOADER PRO ===")
+    print("=== AVVIO SUITE DI TEST CON CONTROLLO & INTERRUZIONE DOWNLOAD ===")
     test_status()
     test_video_info()
     test_multilingual_audio()
-    test_download_and_progress()
+    test_selective_cancellation()
+    test_download_and_completion()
     print("=== TUTTI I TEST HANNO AVUTO SUCCESSO! ===")

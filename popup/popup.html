@@ -25,98 +25,134 @@
       </div>
     </header>
 
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button class="nav-tab active" id="tab-video-btn" data-tab="tab-video">
+        <svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/></svg>
+        <span>Video Attivo</span>
+      </button>
+      <button class="nav-tab" id="tab-downloads-btn" data-tab="tab-downloads">
+        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        <span>Download</span>
+        <span class="active-badge" id="active-dl-badge" style="display: none;">0</span>
+      </button>
+    </nav>
+
     <!-- Main Content Area -->
     <main class="app-main">
-      <!-- Loading State -->
-      <div class="loading-state" id="view-loading">
-        <div class="spinner"></div>
-        <div class="loading-text">Rilevamento video nella scheda corrente...</div>
-      </div>
-
-      <!-- No Video State -->
-      <div class="empty-state" id="view-no-video" style="display: none;">
-        <div class="empty-icon">📺</div>
-        <h3>Nessun video YouTube attivo</h3>
-        <p>Apri una pagina video su YouTube per scaricarlo alla massima qualità (fino a 4K/8K) e scegliere la traccia audio desiderata.</p>
-        <button class="btn btn-secondary" id="btn-open-youtube">Vai su YouTube</button>
-      </div>
-
-      <!-- Video Downloader Form State -->
-      <div class="video-state" id="view-video" style="display: none;">
-        <div class="video-card">
-          <div class="thumb-container">
-            <img id="video-thumb" src="" alt="Thumbnail">
-            <span class="duration-badge" id="video-duration">--:--</span>
-          </div>
-          <div class="video-meta">
-            <h2 class="video-title" id="video-title">Titolo del Video</h2>
-            <div class="video-channel" id="video-channel">Canale</div>
-          </div>
+      <!-- TAB 1: Current Active Video -->
+      <section class="tab-pane active" id="pane-video">
+        <!-- Loading State -->
+        <div class="loading-state" id="view-loading">
+          <div class="spinner"></div>
+          <div class="loading-text">Rilevamento video nella scheda corrente...</div>
         </div>
 
-        <div class="max-badge" id="max-quality-badge">
-          ⭐ Massima Risoluzione Rilevata: <strong id="max-quality-text">--</strong>
+        <!-- No Video State -->
+        <div class="empty-state" id="view-no-video" style="display: none;">
+          <div class="empty-icon">📺</div>
+          <h3>Nessun video YouTube attivo</h3>
+          <p>Apri una pagina video su YouTube per scaricarlo alla massima qualità e scegliere la traccia audio desiderata.</p>
+          <button class="btn btn-secondary" id="btn-open-youtube">Vai su YouTube</button>
         </div>
 
-        <div class="control-group">
-          <label class="control-label" for="select-quality">
-            <span>Risoluzione Video</span>
-            <span class="hint-tag">Max default</span>
-          </label>
-          <div class="select-wrapper">
-            <select id="select-quality" class="select-input"></select>
+        <!-- Video Downloader Form State -->
+        <div class="video-state" id="view-video" style="display: none;">
+          <div class="video-card">
+            <div class="thumb-container">
+              <img id="video-thumb" src="" alt="Thumbnail">
+              <span class="duration-badge" id="video-duration">--:--</span>
+            </div>
+            <div class="video-meta">
+              <h2 class="video-title" id="video-title">Titolo del Video</h2>
+              <div class="video-channel" id="video-channel">Canale</div>
+            </div>
+          </div>
+
+          <div class="max-badge" id="max-quality-badge">
+            ⭐ Massima Risoluzione Rilevata: <strong id="max-quality-text">--</strong>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label" for="select-quality">
+              <span>Risoluzione Video</span>
+              <span class="hint-tag">Max default</span>
+            </label>
+            <div class="select-wrapper">
+              <select id="select-quality" class="select-input"></select>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label" for="select-audio">
+              <span>Traccia Audio</span>
+              <span class="hint-tag" id="audio-tracks-count">Audio multilingua</span>
+            </label>
+            <div class="select-wrapper">
+              <select id="select-audio" class="select-input"></select>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label">Formato</label>
+            <div class="format-chips">
+              <button class="format-chip active" data-format="mp4">MP4 Video</button>
+              <button class="format-chip" data-format="webm">WebM Video</button>
+              <button class="format-chip" data-format="audio_only">MP3 Audio</button>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" id="btn-start-download">
+            <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            <span>Scarica nel PC</span>
+          </button>
+
+          <!-- Current active download inline box -->
+          <div class="progress-box" id="progress-box" style="display: none;">
+            <div class="progress-header">
+              <span id="prog-status">Scaricamento in corso...</span>
+              <span id="prog-percent">0%</span>
+            </div>
+            <div class="progress-bar-track">
+              <div class="progress-bar-fill" id="prog-bar-fill"></div>
+            </div>
+            <div class="progress-footer">
+              <span id="prog-speed">-- MB/s</span>
+              <span id="prog-eta">ETA --:--</span>
+            </div>
+            <div class="current-dl-actions" id="current-dl-actions">
+              <button class="btn btn-danger-outline btn-sm" id="btn-cancel-current">
+                ⏹️ Interrompi questo download
+              </button>
+              <button class="btn btn-secondary btn-sm" id="btn-reveal-folder" style="display: none;">
+                📁 Apri in Scaricati
+              </button>
+            </div>
           </div>
         </div>
+      </section>
 
-        <div class="control-group">
-          <label class="control-label" for="select-audio">
-            <span>Traccia Audio</span>
-            <span class="hint-tag" id="audio-tracks-count">Audio multilingua</span>
-          </label>
-          <div class="select-wrapper">
-            <select id="select-audio" class="select-input"></select>
-          </div>
+      <!-- TAB 2: All Active & Recent Downloads -->
+      <section class="tab-pane" id="pane-downloads" style="display: none;">
+        <div class="downloads-pane-header">
+          <div class="pane-title">Tutti i Download</div>
+          <div class="active-count-tag" id="downloads-summary-tag">0 in corso</div>
         </div>
 
-        <div class="control-group">
-          <label class="control-label">Formato</label>
-          <div class="format-chips">
-            <button class="format-chip active" data-format="mp4">MP4 Video</button>
-            <button class="format-chip" data-format="webm">WebM Video</button>
-            <button class="format-chip" data-format="audio_only">MP3 Audio</button>
-          </div>
+        <div class="downloads-list" id="downloads-list-container">
+          <!-- Dynamically populated download cards -->
         </div>
 
-        <button class="btn btn-primary" id="btn-start-download">
-          <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-          <span>Scarica nel PC</span>
-        </button>
-
-        <!-- Progress Box -->
-        <div class="progress-box" id="progress-box" style="display: none;">
-          <div class="progress-header">
-            <span id="prog-status">Scaricamento in corso...</span>
-            <span id="prog-percent">0%</span>
-          </div>
-          <div class="progress-bar-track">
-            <div class="progress-bar-fill" id="prog-bar-fill"></div>
-          </div>
-          <div class="progress-footer">
-            <span id="prog-speed">-- MB/s</span>
-            <span id="prog-eta">ETA --:--</span>
-          </div>
-          <div class="completed-actions" id="completed-actions" style="display: none;">
-            <button class="btn btn-secondary btn-sm" id="btn-reveal-folder">
-              📁 Apri in Scaricati
-            </button>
-          </div>
+        <div class="empty-downloads" id="downloads-empty" style="display: none;">
+          <div class="empty-icon-sm">📥</div>
+          <div>Nessun download attivo o recente.</div>
         </div>
-      </div>
+      </section>
 
       <!-- Helper Alert Box (if helper is offline) -->
       <div class="helper-alert" id="helper-offline-box" style="display: none;">
         <div class="alert-title">⚠️ Helper locale non in esecuzione</div>
-        <p>Per scaricare in 4K e con tracce audio dubbing, avvia il server locale eseguendo nel terminale:</p>
+        <p>Per scaricare ed interrompere i flussi, avvia il server locale:</p>
         <code class="code-block">sw_development/youtube_video_downloader_chrome_extension/backend/start.sh</code>
         <button class="btn btn-sm btn-outline" id="btn-retry-helper" style="margin-top: 8px;">Riprova connessione</button>
       </div>
@@ -125,7 +161,7 @@
     <!-- Footer -->
     <footer class="app-footer">
       <div class="footer-dir">
-        <span>Cartella download:</span>
+        <span>Destinazione:</span>
         <code id="download-folder-path">~/Scaricati</code>
       </div>
     </footer>

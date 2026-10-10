@@ -5,8 +5,9 @@
   let currentVideoUrl = null;
   let activeModal = null;
   let pollInterval = null;
+  let trayInterval = null;
+  let currentDownloadId = null;
 
-  // Icons SVG
   const DOWNLOAD_ICON = `
     <svg viewBox="0 0 24 24">
       <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
@@ -30,7 +31,6 @@
     if (!isWatchPage()) return;
     if (document.getElementById('ytd-action-download-btn')) return;
 
-    // Potential container targets across different YouTube layouts
     const containers = [
       '#top-level-buttons-computed',
       'ytd-watch-metadata #actions #top-level-buttons-computed',
@@ -62,7 +62,6 @@
       openDownloaderModal();
     });
 
-    // Insert after standard buttons
     targetBar.appendChild(btn);
   }
 
@@ -76,7 +75,6 @@
     const videoUrl = getCleanVideoUrl();
     currentVideoUrl = videoUrl;
 
-    // Create modal DOM
     const overlay = document.createElement('div');
     overlay.className = 'ytd-modal-overlay';
     overlay.id = 'ytd-downloader-modal';
@@ -159,11 +157,23 @@
                 <span id="ytd-prog-speed">-- MB/s</span>
                 <span id="ytd-prog-eta">ETA --:--</span>
               </div>
-              <div class="ytd-complete-actions" id="ytd-complete-box">
-                <button class="ytd-open-folder-btn" id="ytd-open-folder">
+              <div class="ytd-complete-actions visible" id="ytd-complete-box" style="margin-top: 10px;">
+                <button class="ytd-cancel-btn" id="ytd-cancel-btn">
+                  ⏹️ Interrompi questo download
+                </button>
+                <button class="ytd-open-folder-btn" id="ytd-open-folder" style="display: none;">
                   📁 Mostra nella cartella Scaricati
                 </button>
               </div>
+            </div>
+
+            <!-- Active Downloads Tray in Modal -->
+            <div class="ytd-active-downloads-tray" id="ytd-active-tray" style="display: none;">
+              <div class="ytd-tray-header">
+                <span>Download attivi in background</span>
+                <span class="ytd-tray-count" id="ytd-tray-count">0</span>
+              </div>
+              <div class="ytd-tray-list" id="ytd-tray-list"></div>
             </div>
           </div>
 
@@ -176,13 +186,11 @@
     document.body.appendChild(overlay);
     activeModal = overlay;
 
-    // Event listeners for close
     document.getElementById('ytd-modal-close').addEventListener('click', closeModal);
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) closeModal();
     });
 
-    // Format pills selector
     let selectedFormat = 'mp4';
     overlay.querySelectorAll('.ytd-pill-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -192,10 +200,8 @@
       });
     });
 
-    // Animate in
     requestAnimationFrame(() => overlay.classList.add('active'));
 
-    // Request video info from background / helper
     try {
       const response = await chrome.runtime.sendMessage({
         action: 'GET_VIDEO_INFO',
@@ -208,9 +214,55 @@
       }
 
       renderVideoData(response, selectedFormat, videoUrl);
+      refreshActiveTray();
+      trayInterval = setInterval(refreshActiveTray, 2500);
     } catch (err) {
       showError('Errore di comunicazione: ' + err.message);
     }
+  }
+
+  async function refreshActiveTray() {
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'GET_ALL_DOWNLOADS' });
+      const items = res?.downloads || [];
+      const activeItems = items.filter(d => ['starting', 'downloading', 'muxing'].includes(d.status) && d.id !== currentDownloadId);
+      
+      const tray = document.getElementById('ytd-active-tray');
+      const countEl = document.getElementById('ytd-tray-count');
+      const listEl = document.getElementById('ytd-tray-list');
+      
+      if (!tray || !countEl || !listEl) return;
+
+      if (activeItems.length === 0) {
+        tray.style.display = 'none';
+        return;
+      }
+
+      tray.style.display = 'block';
+      countEl.textContent = String(activeItems.length);
+      listEl.innerHTML = '';
+
+      activeItems.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'ytd-tray-item';
+        row.innerHTML = `
+          <div class="ytd-tray-item-title">${escapeHtml(item.title || 'Video')}</div>
+          <div style="font-size:11px;color:#aaa;">${Math.round(item.percent || 0)}%</div>
+          <button class="ytd-tray-cancel-btn" data-id="${item.id}">⏹️ Interrompi</button>
+        `;
+        row.querySelector('.ytd-tray-cancel-btn').addEventListener('click', async () => {
+          await chrome.runtime.sendMessage({ action: 'CANCEL_DOWNLOAD', downloadId: item.id });
+          await refreshActiveTray();
+        });
+        listEl.appendChild(row);
+      });
+    } catch (e) {
+      console.warn('Tray refresh error:', e);
+    }
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   function renderVideoData(info, initialFormat, videoUrl) {
@@ -223,7 +275,6 @@
     document.getElementById('ytd-channel').textContent = info.channel || '';
     document.getElementById('ytd-max-label').textContent = info.maxQuality || 'Massima qualità';
 
-    // Populate video qualities (Max Quality first!)
     const qualitySelect = document.getElementById('ytd-select-quality');
     qualitySelect.innerHTML = '';
 
@@ -241,7 +292,6 @@
       });
     }
 
-    // Populate audio tracks
     const audioSelect = document.getElementById('ytd-select-audio');
     audioSelect.innerHTML = '';
 
@@ -261,8 +311,25 @@
       audioSelect.appendChild(opt);
     }
 
-    // Start download handler
     const startBtn = document.getElementById('ytd-start-download');
+    const cancelBtn = document.getElementById('ytd-cancel-btn');
+
+    cancelBtn.addEventListener('click', async () => {
+      if (currentDownloadId) {
+        cancelBtn.disabled = true;
+        cancelBtn.textContent = 'Interruzione...';
+        await chrome.runtime.sendMessage({
+          action: 'CANCEL_DOWNLOAD',
+          downloadId: currentDownloadId
+        });
+        document.getElementById('ytd-prog-status').textContent = '⏹️ Download interrotto dall\'utente';
+        startBtn.disabled = false;
+        startBtn.innerHTML = `<span>Scarica di nuovo</span>`;
+        cancelBtn.style.display = 'none';
+        await refreshActiveTray();
+      }
+    });
+
     startBtn.onclick = async () => {
       startBtn.disabled = true;
       startBtn.innerHTML = `<div class="ytd-spinner"></div><span>Avvio download...</span>`;
@@ -286,7 +353,12 @@
         });
 
         if (startRes && startRes.download_id) {
+          currentDownloadId = startRes.download_id;
+          cancelBtn.style.display = 'inline-flex';
+          cancelBtn.disabled = false;
+          cancelBtn.textContent = '⏹️ Interrompi questo download';
           trackDownloadProgress(startRes.download_id);
+          refreshActiveTray();
         } else {
           showError('Impossibile avviare il download: ' + (startRes?.error || 'Errore sconosciuto'));
           startBtn.disabled = false;
@@ -309,7 +381,8 @@
     const barEl = document.getElementById('ytd-prog-bar');
     const speedEl = document.getElementById('ytd-prog-speed');
     const etaEl = document.getElementById('ytd-prog-eta');
-    const completeBox = document.getElementById('ytd-complete-box');
+    const cancelBtn = document.getElementById('ytd-cancel-btn');
+    const openFolderBtn = document.getElementById('ytd-open-folder');
     const startBtn = document.getElementById('ytd-start-download');
 
     if (pollInterval) clearInterval(pollInterval);
@@ -341,21 +414,29 @@
           percentEl.textContent = '100%';
           speedEl.textContent = 'Salvato nella cartella Scaricati';
           etaEl.textContent = prog.filename || '';
-          completeBox.classList.add('visible');
+          cancelBtn.style.display = 'none';
+          openFolderBtn.style.display = 'inline-flex';
 
           startBtn.disabled = false;
           startBtn.innerHTML = `<span>Scarica di nuovo</span>`;
 
-          document.getElementById('ytd-open-folder').onclick = async () => {
+          openFolderBtn.onclick = async () => {
             await chrome.runtime.sendMessage({
               action: 'OPEN_FOLDER',
               path: prog.path
             });
           };
+        } else if (prog.status === 'cancelled') {
+          clearInterval(pollInterval);
+          statusEl.textContent = '⏹️ Download interrotto';
+          cancelBtn.style.display = 'none';
+          startBtn.disabled = false;
+          startBtn.innerHTML = `<span>Scarica di nuovo</span>`;
         } else if (prog.status === 'error') {
           clearInterval(pollInterval);
           statusEl.textContent = '❌ Errore durante il download';
           showError(prog.error || 'Errore nel processo di download.');
+          cancelBtn.style.display = 'none';
           startBtn.disabled = false;
           startBtn.innerHTML = `<span>Riprova</span>`;
         }
@@ -372,7 +453,7 @@
     errBox.innerHTML = `
       <strong>Attenzione:</strong> ${msg}
       <div style="margin-top: 8px; font-size: 12px; color: #ddd;">
-        💡 Per abilitare il download alla massima qualità 4K e tutte le tracce audio, assicurati che il server sia attivo eseguendo nel terminale:<br>
+        💡 Per abilitare il download e il controllo dei flussi, avvia il server con:<br>
         <code style="background: rgba(0,0,0,0.4); padding: 3px 6px; border-radius: 4px; display: inline-block; margin-top: 4px;">sw_development/youtube_video_downloader_chrome_extension/backend/start.sh</code>
       </div>
     `;
@@ -382,6 +463,10 @@
     if (pollInterval) {
       clearInterval(pollInterval);
       pollInterval = null;
+    }
+    if (trayInterval) {
+      clearInterval(trayInterval);
+      trayInterval = null;
     }
     if (activeModal) {
       activeModal.classList.remove('active');
@@ -394,7 +479,6 @@
     }
   }
 
-  // Observer to detect YouTube SPA transitions
   function initObserver() {
     injectDownloadButton();
 
