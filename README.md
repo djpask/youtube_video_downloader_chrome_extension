@@ -91,6 +91,11 @@ Per avviare il motore locale:
 
 Il server rimarrà attivo in background sulla porta `http://127.0.0.1:8765` e salverà automaticamente i file scaricati nella tua cartella **`~/Scaricati`**.
 
+Per fermare il server helper:
+```bash
+/home/pask/sw_development/youtube_video_downloader_chrome_extension/backend/stop.sh
+```
+
 ---
 
 ## 🧪 Verifica e Test del Funzionamento
